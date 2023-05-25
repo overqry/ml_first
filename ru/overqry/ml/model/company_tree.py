@@ -30,6 +30,8 @@ data['changes_timestamp'] = data['changes_timestamp'].apply(
 
 data['diff_changes_plan'] = data['changes_timestamp'] - data['plan_timestamp']
 
+
+
 X = data.drop(['BuilderCompany','BuilderObjectRu','BuildFinishDate', 'PDChangesBuildFinishDate','diff_changes_plan', 'plan_timestamp', 'changes_timestamp'], axis=1)
 y = data.diff_changes_plan
 

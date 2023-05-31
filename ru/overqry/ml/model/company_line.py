@@ -5,9 +5,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import pylab
 import numpy as np
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import recall_score
+from sklearn.metrics import precision_score
 
 data = pd.read_csv('../data/set_1.csv', encoding='windows-1251', delimiter=';')
 
@@ -35,23 +38,28 @@ data['changes_timestamp'] = data['changes_timestamp'].apply(
 
 data['diff_changes_plan'] = data['changes_timestamp'] - data['plan_timestamp']
 
-
 data_describe = pd.DataFrame(data.describe(include='object'))
 data_corr = pd.DataFrame(data.corr(numeric_only=True))
 
-#пока бесполезно, но вывел в IDEA графики через плагины
-#plt.scatter(data.plan_timestamp, data.diff_changes_plan, c=data.diff_changes_plan)
-
-#TODO надо обдумать
-#print(data.groupby('diff_changes_plan')['BuilderCompany'].mean())
-#data[data.diff_changes_plan == 0]['is_plan_success'].hist(bins=30)
-#data[data.diff_changes_plan != 0]['is_plan_success'].hist(bins=30)
-
-X = data.drop(['BuilderCompany','BuilderObjectRu','BuildFinishDate', 'PDChangesBuildFinishDate','diff_changes_plan', 'plan_timestamp', 'changes_timestamp'], axis=1)
-y = data.diff_changes_plan
+X = data.drop(['BuilderCompany','BuilderObjectRu','BuildFinishDate', 'PDChangesBuildFinishDate','is_plan_success', 'plan_timestamp', 'changes_timestamp'], axis=1)
+y = data.is_plan_success
 
 Xtrain, Xtest, ytrain, ytest = train_test_split(X, y, test_size=0.25, random_state=42)
+
+ss = StandardScaler()
+ss.fit(Xtrain)
+Xtrain = pd.DataFrame(ss.transform(Xtrain), columns=X.columns)
+Xtest = pd.DataFrame(ss.transform(Xtest), columns=X.columns)
+
 model = LogisticRegression()
 model.fit(Xtrain, ytrain)
-ypred_test = model.predict(Xtest)
-print(accuracy_score(ytest, ypred_test))
+
+pred_test = model.predict(Xtest)
+
+accuracy = accuracy_score(ytest, pred_test)
+recall = recall_score(ytest, pred_test)
+precision = precision_score(ytest, pred_test)
+aucroc = roc_auc_score(ytest,  model.predict_proba(Xtest)[:,1])
+
+coef = pd.DataFrame(model.coef_)
+intercept = pd.DataFrame(model.intercept_)

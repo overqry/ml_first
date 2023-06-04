@@ -9,7 +9,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
-from catboost import CatBoostClassifier, Pool
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 
@@ -31,50 +30,34 @@ data['is_deviation'] = data['diff_changes_plan'].apply(
     lambda it: 1 if it > year_timestamp else 0
 )
 
-data_describe = pd.DataFrame(data.describe(include='object'))
-data_corr = pd.DataFrame(data.corr(numeric_only=True))
-
-X = data.drop(['BuilderCompany', 'BuilderCompanyCode', 'BuilderObjectRu', 'BuildFinishDate', 'PDChangesBuildFinishDate', 'is_deviation', 'plan_timestamp', 'changes_timestamp'], axis=1)
+X_full = data.copy().drop(['BuilderCompanyCode', 'BuilderObjectRu', 'BuildFinishDate', 'PDChangesBuildFinishDate','is_deviation', 'plan_timestamp', 'changes_timestamp'], axis=1)
+X = data.drop(['BuilderCompany', 'BuilderCompanyCode', 'BuilderObjectRu', 'BuildFinishDate', 'PDChangesBuildFinishDate','is_deviation', 'plan_timestamp', 'changes_timestamp'], axis=1)
 y = data['is_deviation']
-Xtrain, Xtest, ytrain, ytest = train_test_split(X, y, test_size=0.25, random_state=42)
+#Xtrain, Xtest, ytrain, ytest = train_test_split(X_full, y, test_size=0.25, random_state=42)
 
+categorical = ['BuilderCompany']
+numeric_features = X.columns
 column_transformer = ColumnTransformer([
-    ('scaling', StandardScaler(), X.columns)
+    ('ohe', OneHotEncoder(handle_unknown="ignore"), categorical),
+    ('scaling', StandardScaler(), numeric_features)
 ])
-X_transformed = column_transformer.fit_transform(Xtrain)
-X_test_transformed = column_transformer.fit_transform(Xtest)
+X_transformed = column_transformer.fit_transform(X_full)
+Xtrain, Xtest, ytrain, ytest = train_test_split(X_transformed, y, test_size=0.25, random_state=42)
+#X_test_transformed = column_transformer.fit_transform(Xtest)
 
-train_set = Pool(X_transformed, ytrain)
-test_set = Pool(X_test_transformed, ytest)
+model = LogisticRegression()
+model.fit(Xtrain, ytrain)
 
-gbm = CatBoostClassifier(
-    iterations = 100,
-    depth = 3,
-    learning_rate = 0.1,
-    loss_function = 'Logloss',
-    eval_metric = 'AUC',
-    verbose = False)
+pred = model.predict(Xtest)
+accuracy = accuracy_score(ytest, pred)
 
-gbm.fit(train_set, eval_set = test_set)
-
-eval_metrics = gbm.get_evals_result()
-plt.plot(eval_metrics['validation']['AUC'])
-plt.xlabel('n_trees')
-plt.ylabel('AUC')
-plt.grid()
-
-gbm_pred = gbm.predict(X_test_transformed)
-accuracy = accuracy_score(ytest, gbm_pred)
-
-gbm_pred_proba = gbm.predict_proba(X_test_transformed)
-classes = (gbm_pred_proba[:, 1] > 0.5)
+pred_proba = model.predict_proba(Xtest)
+classes = (pred_proba[:, 0] > 0.1)
 recall = recall_score(ytest, classes)
 precision = precision_score(ytest, classes)
-aucroc = roc_auc_score(ytest,  gbm_pred_proba[:,1])
+aucroc = roc_auc_score(ytest,  pred_proba[:,1])
 
 print("accuracy: ", accuracy)
 print("recall: ", recall)
 print("precision: ", precision)
 print("aucroc: ", aucroc)
-
-coef = pd.DataFrame({'features' : list(X.columns), 'importances' : list(gbm.get_feature_importance())})
